@@ -1,6 +1,6 @@
 // Service worker: caches the game on first visit so it works fully offline.
 // Bump CACHE when you publish a new version so players get the update.
-const CACHE = 'faral-man-v4';
+const CACHE = 'faral-man-v5';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './og.png'];
 
 self.addEventListener('install', e => {
