@@ -55,7 +55,7 @@ button.alt{color:#fff;background:linear-gradient(180deg,#8e5be0,#5a2fb0);box-sha
 .card small{font-size:.7em;color:#d9cfee;margin:.15em 0}
 .card .meta{font-size:.68em;color:#ffd27a}
 .card kbd{font:inherit;font-size:.7em;background:rgba(255,255,255,.18);border-radius:.3em;padding:0 .35em;margin-right:.3em}
-#menuBtn{position:fixed;top:8px;left:8px;width:40px;height:40px;padding:0;font-size:18px;border-radius:50%;
+#menuBtn{position:fixed;top:8px;left:8px;height:40px;padding:0 1em;font-size:15px;border-radius:2em;
   background:rgba(255,255,255,.12);color:#fff;box-shadow:none;z-index:5}
 #mute{position:fixed;top:8px;right:8px;width:40px;height:40px;padding:0;font-size:18px;border-radius:50%;
   background:rgba(255,255,255,.12);color:#fff;box-shadow:none;z-index:5}
@@ -85,7 +85,7 @@ button.alt{color:#fff;background:linear-gradient(180deg,#8e5be0,#5a2fb0);box-sha
     <div><button id="backBtn" class="alt" style="font-size:.9em;margin-top:.9em">Back</button></div>
   </div>
 </div>
-<button id="menuBtn" aria-label="Change map" title="Change map">&#128506;</button>
+<button id="menuBtn" aria-label="Change map" title="Change map">Maps</button>
 <button id="mute" aria-label="Toggle sound">&#128266;</button>
 
 <script>
@@ -140,10 +140,14 @@ const THEMES = [
   {name:'Bhai Dooj',          wall:'#b388ff', bg:['#1a1040','#090622']}
 ];
 const GDEF = [
-  {name:'Nosy Aunty',   color:'#ff5fa2', corner:[17,0],  msg:'"Beta, shaadi kab karoge?" \u{1F635}', rel:0},
-  {name:'Firecracker',  color:'#ff4136', corner:[1,0],   msg:'BOOM! \u{1F4A5}',                      rel:3},
-  {name:'Cleaning Mom', color:'#2fcf79', corner:[17,20], msg:'Swept away! \u{1F9F9}',                 rel:6},
-  {name:'Sleepy Uncle', color:'#5aa9ff', corner:[1,20],  msg:'Uncle sat on you... \u{1F634}',         rel:10}
+  {name:'Nosy Aunty',   color:'#ff5fa2', corner:[17,0],  rel:0,
+    quotes:['Beta, shaadi kab karoge?', 'Sharma ji ka beta toh settled hai!', 'Itna patla ho gaya, kuch khaya nahi?', 'Salary kitni hai tumhari?']},
+  {name:'Firecracker',  color:'#ff4136', corner:[1,0],   rel:3,
+    quotes:['BOOM! Happy Diwali!', 'Phat! Phatak! Dhamaka!', 'Tadaaam! Anar chal gaya!', 'Sssss... BANG!']},
+  {name:'Cleaning Mom', color:'#2fcf79', corner:[17,20], rel:6,
+    quotes:['Pehle ghar saaf karo!', 'Rangoli kharab mat karna!', 'Jootay bahar utaro!', 'Diwali se pehle safai!']},
+  {name:'Sleepy Uncle', color:'#5aa9ff', corner:[1,20],  rel:10,
+    quotes:['Zzz... hamare zamane mein...', 'Arre baitho na, baatein karte hain...', 'Beta, thoda aaram kar lo... zzz', 'Haan? Kya? Kaun?... zzz']}
 ];
 const MODES = [7, 20, 7, 20, 5, 20, 5, 1e9]; // even index = scatter, odd = chase
 
@@ -193,7 +197,7 @@ let level = 0, score = 0, lives = 3, extraGiven = false, hi = 0;
 let grid, ftype, faralLeft, thali = new Set();
 let player, ghosts = [], want = {x:-1, y:0};
 let stateT = 0, playT = 0, modeIdx = 0, modeT = 7, scaredT = 0, combo = 0, dropT = 10;
-let banner = null, popups = [], deathMsg = '', deathBurst = false;
+let banner = null, popups = [], deathMsg = '', deathBurst = false, deathGhost = null, deathQuote = '', deathDur = 2.4;
 let mazeCanvas = null;
 setMap(0);
 
@@ -308,7 +312,7 @@ function resetEntities() {
   player = {tx: 9, ty: 15, dx: 0, dy: 0, p: 0, speed: 6.6, fdx: -1, fdy: 0};
   want = {x: -1, y: 0};
   ghosts = GDEF.map((d, i) => ({
-    idx: i, name: d.name, color: d.color, corner: d.corner, msg: d.msg,
+    idx: i, name: d.name, color: d.color, corner: d.corner, quotes: d.quotes,
     tx: i === 0 ? 9 : 7 + i, ty: i === 0 ? 7 : 9, dx: 0, dy: 0, p: 0, speed: 5,
     state: i === 0 ? 'normal' : 'wait', scared: false,
     rel: d.rel * Math.max(.4, 1 - level * .1)
@@ -439,9 +443,12 @@ function ghostSpeed(g) {
 }
 const gpos = e => [e.tx + e.dx * e.p, e.ty + e.dy * e.p];
 
-function kill(msg, sonpapdi) {
+function kill(msg, sonpapdi, ghost) {
   if (state !== 'play') return;
-  state = 'dying'; stateT = 1.9; deathMsg = msg; deathBurst = false;
+  deathGhost = ghost || null; deathQuote = msg;
+  deathMsg = ghost ? ghost.name + ' says: “' + msg + '”' : msg;
+  deathDur = ghost ? 4 : 2.6;          // ghost quotes stay long enough to read
+  state = 'dying'; stateT = deathDur; deathBurst = false;
   player.dx = 0; player.dy = 0;
   sonpapdi ? sfx.die() : sfx.caught();
 }
@@ -464,7 +471,7 @@ function update(dt) {
   }
   if (state === 'dying') {
     stateT -= dt;
-    if (!deathBurst && stateT < .35) { deathBurst = true; const [x, y] = tileXY(player.tx, player.ty); burst(fx, x, y, 24, '#ffd23a'); }
+    if (!deathBurst && deathDur - stateT > 1.6) { deathBurst = true; const [x, y] = tileXY(player.tx, player.ty); burst(fx, x, y, 24, '#ffd23a'); }
     if (stateT <= 0) {
       lives--;
       if (lives <= 0) gameOver();
@@ -507,7 +514,7 @@ function update(dt) {
         const pts = 200 * (2 ** Math.min(combo, 3)); combo++; addScore(pts);
         const [sx, sy] = tileXY(gx, gy); popups.push({x: sx, y: sy, text: pts, t: 1});
         burst(fx, sx, sy, 30); sfx.boom(); sfx.eatGhost();
-      } else { kill(g.msg, false); return; }
+      } else { kill(g.quotes[Math.floor(Math.random() * g.quotes.length)], false, g); return; }
     }
   }
 
@@ -679,6 +686,50 @@ function pill(text, y, color = '#ffe27a') {
   ctx.textAlign = 'left';
 }
 
+function rrPath(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function wrapText(text, maxW) {
+  const lines = []; let cur = '';
+  for (const w of text.split(' ')) {
+    const t = cur ? cur + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+// Speech bubble above (or below) the ghost that caught the player: name tag + what they said.
+function drawBubble(g, elapsed) {
+  const [gx, gy] = gpos(g), [sx, sy] = tileXY(gx, gy);
+  ctx.save();
+  ctx.font = 'bold 15px "Trebuchet MS",sans-serif';
+  const lines = wrapText('“' + deathQuote + '”', 200), lh = 20, head = 24;
+  const bw = Math.max(110, ...lines.map(l => ctx.measureText(l).width)) + 28, bh = head + lines.length * lh + 8;
+  const bx = Math.min(CW - bw / 2 - 6, Math.max(bw / 2 + 6, sx));
+  const above = sy - 30 - bh > OY + 4;
+  const by = above ? sy - 30 - bh : sy + 30, left = bx - bw / 2;
+  ctx.globalAlpha = Math.min(1, elapsed / .25);
+  // tail pointing at the ghost
+  const tx = Math.min(left + bw - 18, Math.max(left + 18, sx)), ty = above ? by + bh : by;
+  ctx.fillStyle = '#fff'; ctx.beginPath();
+  ctx.moveTo(tx - 9, ty); ctx.lineTo(tx + 9, ty); ctx.lineTo(sx, above ? sy - 15 : sy + 15); ctx.closePath(); ctx.fill();
+  // bubble body with coloured name tag
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12;
+  ctx.fillStyle = '#fff'; rrPath(left, by, bw, bh, 12); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.save(); rrPath(left, by, bw, bh, 12); ctx.clip();
+  ctx.fillStyle = g.color; ctx.fillRect(left, by, bw, head);
+  ctx.restore();
+  ctx.strokeStyle = g.color; ctx.lineWidth = 2.5; rrPath(left, by, bw, bh, 12); ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#1a1030'; ctx.font = 'bold 13px "Trebuchet MS",sans-serif';
+  ctx.fillText(g.name.toUpperCase() + ' SAYS:', bx, by + head / 2 + 1);
+  ctx.fillStyle = '#222'; ctx.font = 'bold 15px "Trebuchet MS",sans-serif';
+  lines.forEach((l, i) => ctx.fillText(l, bx, by + head + 14 + i * lh));
+  ctx.restore();
+}
+
 function draw() {
   const th = theme();
   const g = ctx.createLinearGradient(0, 0, 0, CH); g.addColorStop(0, th.bg[0]); g.addColorStop(1, th.bg[1]);
@@ -700,7 +751,7 @@ function draw() {
   }
 
   // ghosts
-  if (state !== 'dying' || stateT > .9) for (const gh of ghosts) {
+  if (state !== 'dying' || deathGhost || deathDur - stateT < 1) for (const gh of ghosts) {
     const [gx, gy] = gpos(gh), [sx, sy] = tileXY(gx, gy);
     drawGhost(ctx, gh, sx, sy, tAll);
   }
@@ -708,7 +759,7 @@ function draw() {
   if (player && state !== 'over' && state !== 'title') {
     const [px, py] = gpos(player), [sx, sy] = tileXY(px, py);
     if (state === 'dying') {
-      const q = 1 - stateT / 1.9;
+      const q = Math.min(1, (deathDur - stateT) / 1.9);
       if (q < .85) drawPlayer(ctx, sx, sy, player.fdx, player.fdy, q < .15 ? .3 : Math.min(Math.PI * .999, (q - .15) / .7 * Math.PI));
     } else {
       const moving = player.dx || player.dy;
@@ -726,7 +777,11 @@ function draw() {
 
   const midY = OY + 11.5 * T;
   if (state === 'ready') pill('GET READY!', midY);
-  else if (state === 'dying' && stateT < 1.6) pill(deathMsg, midY, '#ff8a8a');
+  else if (state === 'dying') {
+    const el = deathDur - stateT;
+    if (deathGhost) drawBubble(deathGhost, el);
+    else if (el > .3) pill(deathMsg, midY, '#ff8a8a');
+  }
   else if (banner) pill(banner.text, midY);
   if (paused && state !== 'title' && state !== 'over') {
     ctx.fillStyle = 'rgba(8,3,24,.75)'; ctx.fillRect(0, OY, CW, H * T);
